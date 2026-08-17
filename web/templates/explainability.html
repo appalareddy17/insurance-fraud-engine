@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% set active = "explainability" %}
+{% block content %}
+
+<h1 class="text-3xl font-bold text-slate-800 mb-6">Model Explainability (SHAP)</h1>
+
+<!-- Beeswarm -->
+<div class="bg-white rounded-xl shadow p-6 mb-8">
+    <h2 class="text-base font-semibold text-slate-700 mb-1">Global Feature Importance — Beeswarm</h2>
+    <p class="text-sm text-slate-400 mb-4">Features pushing predictions toward fraud (red) or legitimate (blue). Sampled from 500 training claims.</p>
+    <img src="data:image/png;base64,{{ bee_b64 }}" class="w-full" alt="SHAP beeswarm">
+</div>
+
+<!-- Claim Selector + Waterfall -->
+<div class="bg-white rounded-xl shadow p-6">
+    <h2 class="text-base font-semibold text-slate-700 mb-4">Local Explanation — Single Claim</h2>
+
+    <form method="GET" action="/explainability" class="flex items-center gap-4 mb-6">
+        <label class="text-sm font-medium text-slate-600">Claim Index (0 – {{ max_idx }}):</label>
+        <input type="number" name="idx" value="{{ idx }}" min="0" max="{{ max_idx }}"
+               class="border border-slate-300 rounded-lg px-3 py-2 w-28 text-center focus:outline-none focus:ring-2 focus:ring-amber-400">
+        <button type="submit"
+                class="bg-slate-800 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-slate-700 transition">
+            Explain
+        </button>
+    </form>
+
+    <!-- Labels -->
+    <div class="flex flex-wrap gap-4 mb-6">
+        <div class="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 min-w-[120px]">
+            <p class="text-xs text-slate-400 uppercase tracking-widest">Actual</p>
+            <p class="text-base font-semibold text-slate-800 mt-1">{{ actual }}</p>
+        </div>
+        <div class="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 min-w-[150px]">
+            <p class="text-xs text-slate-400 uppercase tracking-widest">Fraud Probability</p>
+            <p class="text-base font-semibold text-slate-800 mt-1">{{ prob }}</p>
+        </div>
+        <div class="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 min-w-[120px]">
+            <p class="text-xs text-slate-400 uppercase tracking-widest">Risk Level</p>
+            <p class="text-base font-bold mt-1
+                {% if risk_color == 'green' %}text-green-600
+                {% elif risk_color == 'amber' %}text-amber-600
+                {% else %}text-red-600{% endif %}">
+                {{ risk_label }}
+            </p>
+        </div>
+    </div>
+
+    <img src="data:image/png;base64,{{ wf_b64 }}" class="w-full" alt="SHAP waterfall">
+</div>
+
+{% endblock %}

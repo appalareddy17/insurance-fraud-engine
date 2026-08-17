@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% set active = "evaluation" %}
+{% block content %}
+
+<h1 class="text-3xl font-bold text-slate-800 mb-6">Model Evaluation</h1>
+
+<!-- Metrics Table -->
+<div class="bg-white rounded-xl shadow p-6 mb-8">
+    <h2 class="text-base font-semibold text-slate-700 mb-4">Metrics Comparison</h2>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm text-center">
+            <thead>
+                <tr class="bg-slate-800 text-white">
+                    <th class="px-5 py-3 text-left">Model</th>
+                    {% for col in columns %}
+                    <th class="px-5 py-3">{{ col | upper }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in metrics %}
+                <tr class="border-b {% if loop.index is even %}bg-slate-50{% endif %} hover:bg-amber-50 transition">
+                    <td class="px-5 py-3 text-left font-semibold text-slate-700">{{ row.model }}</td>
+                    {% for col in columns %}
+                    <td class="px-5 py-3 font-mono">{{ row[col] }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ROC + PR -->
+<div class="grid grid-cols-2 gap-6 mb-8">
+    <div class="bg-white rounded-xl shadow p-6">
+        <h2 class="text-base font-semibold text-slate-700 mb-4">ROC Curves</h2>
+        <img src="data:image/png;base64,{{ roc_b64 }}" class="w-full" alt="ROC">
+    </div>
+    <div class="bg-white rounded-xl shadow p-6">
+        <h2 class="text-base font-semibold text-slate-700 mb-4">Precision-Recall Curves</h2>
+        <img src="data:image/png;base64,{{ pr_b64 }}" class="w-full" alt="PR">
+    </div>
+</div>
+
+<!-- Confusion Matrix -->
+<div class="bg-white rounded-xl shadow p-6 max-w-md mx-auto">
+    <h2 class="text-base font-semibold text-slate-700 mb-4">Confusion Matrix (XGBoost)</h2>
+    <img src="data:image/png;base64,{{ cm_b64 }}" class="w-full" alt="Confusion Matrix">
+</div>
+
+{% endblock %}
