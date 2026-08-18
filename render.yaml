@@ -3,8 +3,5 @@ services:
     name: insurance-fraud-engine
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt -r requirements_web.txt
+    buildCommand: pip install fastapi uvicorn jinja2 python-multipart pandas numpy scikit-learn xgboost shap matplotlib seaborn reportlab
     startCommand: uvicorn web.main:app --host 0.0.0.0 --port $PORT
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
