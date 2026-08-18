@@ -118,7 +118,7 @@ async def overview(request: Request):
     df[df['fraud_reported'] == 1]['total_claim_amount'].plot(
         kind='hist', bins=30, alpha=0.6, label='Fraud', ax=ax, color='#F44336'
     )
-    ax.set_xlabel('Total Claim Amount ($)')
+    ax.set_xlabel('Total Claim Amount (₹)')
     ax.set_ylabel('Count')
     ax.legend()
     hist_b64 = fig_to_b64(fig_hist)
