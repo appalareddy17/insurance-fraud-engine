@@ -21,5 +21,7 @@ RUN pip install --no-cache-dir \
     seaborn==0.13.2 \
     reportlab==4.2.0
 
+RUN mkdir -p /app/web/static
+
 EXPOSE 8000
 CMD uvicorn web.main:app --host 0.0.0.0 --port $PORT
