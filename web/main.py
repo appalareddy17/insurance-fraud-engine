@@ -74,30 +74,7 @@ async def lifespan(app: FastAPI):
     xgb = XGBoostModel(scale_pos_weight=3.0)
     xgb.train(X_train_enc, y_train)
 
-    APP_STATE.update({
-        "df": df,
-        "fe_baseline": fe_baseline,
-        "fe_xgb": fe_xgb,
-        "X_train_enc": X_train_enc,
-        "X_val_sc": X_val_sc,
-        "X_val_enc": X_val_enc,
-        "y_val": y_val,
-        "baseline": baseline,
-        "xgb": xgb,
-    })
-    yield
-    APP_STATE.clear()
-
-
-app = FastAPI(lifespan=lifespan)
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
-
-
-# ── GET / ─────────────────────────────────────────────────────────────────────
-@app.get("/", response_class=HTMLResponse)
-async def overview(request: Request):
-    df = APP_STATE["df"]
+    # ── Pre-compute overview charts ────────────────────────────────────────
     fraud_count = int(df['fraud_reported'].sum())
     legit_count = len(df) - fraud_count
 
@@ -118,34 +95,12 @@ async def overview(request: Request):
     df[df['fraud_reported'] == 1]['total_claim_amount'].plot(
         kind='hist', bins=30, alpha=0.6, label='Fraud', ax=ax, color='#F44336'
     )
-    ax.set_xlabel('Total Claim Amount (₹)')
+    ax.set_xlabel('Total Claim Amount ($)')
     ax.set_ylabel('Count')
     ax.legend()
     hist_b64 = fig_to_b64(fig_hist)
 
-    return templates.TemplateResponse("overview.html", {
-        "request": request,
-        "total": len(df),
-        "fraud_count": fraud_count,
-        "legit_count": legit_count,
-        "fraud_pct": f"{fraud_count / len(df) * 100:.1f}",
-        "legit_pct": f"{legit_count / len(df) * 100:.1f}",
-        "pie_b64": pie_b64,
-        "hist_b64": hist_b64,
-        "sample": df.head(10).to_dict(orient='records'),
-        "columns": df.columns.tolist(),
-    })
-
-
-# ── GET /evaluation ────────────────────────────────────────────────────────────
-@app.get("/evaluation", response_class=HTMLResponse)
-async def evaluation(request: Request):
-    baseline = APP_STATE["baseline"]
-    xgb = APP_STATE["xgb"]
-    X_val_sc = APP_STATE["X_val_sc"]
-    X_val_enc = APP_STATE["X_val_enc"]
-    y_val = APP_STATE["y_val"]
-
+    # ── Pre-compute evaluation charts ─────────────────────────────────────
     class _Proxy:
         def __init__(self, model, X):
             self._model = model
@@ -160,8 +115,6 @@ async def evaluation(request: Request):
     }
 
     metrics_df = evaluator.compare_models(models_proxy, None, y_val)
-
-    # Pre-format numbers for template
     metrics_records = []
     for model_name, row in metrics_df.iterrows():
         record = {"model": model_name}
@@ -173,13 +126,77 @@ async def evaluation(request: Request):
     fig_pr = evaluator.plot_pr_curves(models_proxy, None, y_val)
     fig_cm = evaluator.plot_confusion_matrix(y_val, xgb.predict_proba(X_val_enc))
 
-    return templates.TemplateResponse("evaluation.html", {
-        "request": request,
-        "metrics": metrics_records,
-        "columns": metrics_df.columns.tolist(),
+    # ── Pre-compute SHAP beeswarm (most expensive operation) ──────────────
+    sample_size = min(500, len(X_train_enc))
+    X_sample = X_train_enc.sample(sample_size, random_state=42)
+    fig_bee = shap_explainer.plot_beeswarm(xgb, X_sample, max_display=15)
+    bee_b64 = fig_to_b64(fig_bee)
+
+    APP_STATE.update({
+        "df": df,
+        "fe_baseline": fe_baseline,
+        "fe_xgb": fe_xgb,
+        "X_train_enc": X_train_enc,
+        "X_val_sc": X_val_sc,
+        "X_val_enc": X_val_enc,
+        "y_val": y_val,
+        "baseline": baseline,
+        "xgb": xgb,
+        # Cached overview
+        "pie_b64": pie_b64,
+        "hist_b64": hist_b64,
+        "overview_total": len(df),
+        "overview_fraud_count": fraud_count,
+        "overview_legit_count": legit_count,
+        "overview_fraud_pct": f"{fraud_count / len(df) * 100:.1f}",
+        "overview_legit_pct": f"{legit_count / len(df) * 100:.1f}",
+        "overview_sample": df.head(10).to_dict(orient='records'),
+        "overview_columns": df.columns.tolist(),
+        # Cached evaluation
+        "metrics_records": metrics_records,
+        "metrics_columns": metrics_df.columns.tolist(),
         "roc_b64": fig_to_b64(fig_roc),
         "pr_b64": fig_to_b64(fig_pr),
         "cm_b64": fig_to_b64(fig_cm),
+        # Cached SHAP beeswarm
+        "bee_b64": bee_b64,
+    })
+    yield
+    APP_STATE.clear()
+
+
+app = FastAPI(lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+
+# ── GET / ─────────────────────────────────────────────────────────────────────
+@app.get("/", response_class=HTMLResponse)
+async def overview(request: Request):
+    return templates.TemplateResponse("overview.html", {
+        "request": request,
+        "total": APP_STATE["overview_total"],
+        "fraud_count": APP_STATE["overview_fraud_count"],
+        "legit_count": APP_STATE["overview_legit_count"],
+        "fraud_pct": APP_STATE["overview_fraud_pct"],
+        "legit_pct": APP_STATE["overview_legit_pct"],
+        "pie_b64": APP_STATE["pie_b64"],
+        "hist_b64": APP_STATE["hist_b64"],
+        "sample": APP_STATE["overview_sample"],
+        "columns": APP_STATE["overview_columns"],
+    })
+
+
+# ── GET /evaluation ────────────────────────────────────────────────────────────
+@app.get("/evaluation", response_class=HTMLResponse)
+async def evaluation(request: Request):
+    return templates.TemplateResponse("evaluation.html", {
+        "request": request,
+        "metrics": APP_STATE["metrics_records"],
+        "columns": APP_STATE["metrics_columns"],
+        "roc_b64": APP_STATE["roc_b64"],
+        "pr_b64": APP_STATE["pr_b64"],
+        "cm_b64": APP_STATE["cm_b64"],
     })
 
 
@@ -187,17 +204,12 @@ async def evaluation(request: Request):
 @app.get("/explainability", response_class=HTMLResponse)
 async def explainability(request: Request, idx: int = 0):
     xgb = APP_STATE["xgb"]
-    X_train_enc = APP_STATE["X_train_enc"]
     X_val_enc = APP_STATE["X_val_enc"]
     y_val = APP_STATE["y_val"]
 
     idx = max(0, min(idx, len(X_val_enc) - 1))
 
-    sample_size = min(500, len(X_train_enc))
-    X_sample = X_train_enc.sample(sample_size, random_state=42)
-    fig_bee = shap_explainer.plot_beeswarm(xgb, X_sample, max_display=15)
-    bee_b64 = fig_to_b64(fig_bee)
-
+    # Beeswarm is cached; only waterfall changes per idx
     X_single = X_val_enc.iloc[[idx]]
     fig_wf = shap_explainer.plot_waterfall(xgb, X_single)
     wf_b64 = fig_to_b64(fig_wf)
@@ -208,7 +220,7 @@ async def explainability(request: Request, idx: int = 0):
 
     return templates.TemplateResponse("explainability.html", {
         "request": request,
-        "bee_b64": bee_b64,
+        "bee_b64": APP_STATE["bee_b64"],
         "wf_b64": wf_b64,
         "idx": idx,
         "max_idx": len(X_val_enc) - 1,
