@@ -12,7 +12,6 @@ import pandas as pd
 import numpy as np
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -26,7 +25,6 @@ from src.explainer import shap_explainer
 
 DATA_PATH = Path(__file__).parent.parent / 'data' / 'insurance_claims.csv'
 TEMPLATES_DIR = Path(__file__).parent / 'templates'
-STATIC_DIR = Path(__file__).parent / 'static'
 
 APP_STATE: dict = {}
 
@@ -166,7 +164,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
