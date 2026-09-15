@@ -130,6 +130,12 @@ async def lifespan(app: FastAPI):
     fig_bee = shap_explainer.plot_beeswarm(xgb, X_sample, max_display=15)
     bee_b64 = fig_to_b64(fig_bee)
 
+    # ── Pre-compute waterfall for idx=0 (default view) ────────────────────
+    wf_cache: dict = {}
+    X_first = X_val_enc.iloc[[0]]
+    fig_wf0 = shap_explainer.plot_waterfall(xgb, X_first)
+    wf_cache[0] = fig_to_b64(fig_wf0)
+
     APP_STATE.update({
         "df": df,
         "fe_baseline": fe_baseline,
@@ -158,6 +164,8 @@ async def lifespan(app: FastAPI):
         "cm_b64": fig_to_b64(fig_cm),
         # Cached SHAP beeswarm
         "bee_b64": bee_b64,
+        # Waterfall cache (grows as users visit different idx values)
+        "wf_cache": wf_cache,
     })
     yield
     APP_STATE.clear()
@@ -206,10 +214,14 @@ async def explainability(request: Request, idx: int = 0):
 
     idx = max(0, min(idx, len(X_val_enc) - 1))
 
-    # Beeswarm is cached; only waterfall changes per idx
+    # Serve waterfall from cache; compute and cache if first visit for this idx
+    wf_cache = APP_STATE["wf_cache"]
+    if idx not in wf_cache:
+        X_single = X_val_enc.iloc[[idx]]
+        fig_wf = shap_explainer.plot_waterfall(xgb, X_single)
+        wf_cache[idx] = fig_to_b64(fig_wf)
+    wf_b64 = wf_cache[idx]
     X_single = X_val_enc.iloc[[idx]]
-    fig_wf = shap_explainer.plot_waterfall(xgb, X_single)
-    wf_b64 = fig_to_b64(fig_wf)
 
     prob = float(xgb.predict_proba(X_single)[0])
     actual = "Fraud" if int(y_val.iloc[idx]) == 1 else "Legitimate"
